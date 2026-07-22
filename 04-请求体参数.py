@@ -18,3 +18,15 @@ class User(BaseModel):
 @app.post("/register")
 async def register(user: User):
     return user
+
+
+class Book(BaseModel):
+    title: str = Field(..., min_length=2, max_length=20, description="书名")
+    author: str = Field(min_length=2, max_length=10, description="作者")
+    press: str = Field(default="宝睿出版社", description="出版社")
+    price: float | int = Field(..., gt=0, description="售价，价格要求大于0")
+
+
+@app.post("/book")
+async def addBook(book: Book):
+    return book

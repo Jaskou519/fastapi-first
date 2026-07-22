@@ -1,12 +1,12 @@
 from datetime import datetime
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends
 from sqlalchemy import DateTime, func, String, Float, select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-
 app = FastAPI()
+
 
 # 1. 创建异步引擎
 ASYNC_DATABASE_URL = "mysql+aiomysql://root:123456@localhost:3306/FastAPI_first?charset=utf8"
@@ -21,10 +21,8 @@ async_engine = create_async_engine(
 # 2. 定义模型类： 基类 + 表对应的模型类
 # 基类：创建时间、更新时间；书籍表：id、书名、作者、价格、出版社
 class Base(DeclarativeBase):
-    create_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now,
-                                                  comment="创建时间")
-    update_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now,
-                                                  onupdate=func.now(), comment="修改时间")
+    create_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now, comment="创建时间")
+    update_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now, onupdate=func.now(), comment="修改时间")
 
 
 class Book(Base):
@@ -74,17 +72,18 @@ async def get_database():
             await session.close()  # 关闭会话
 
 
-@app.delete("/book/delete_book/{book_id}")
-async def delete_book(book_id: int, db: AsyncSession = Depends(get_database)):
-    # 先查再删 提交
-    db_book = await db.get(Book, book_id)
+@app.get("/book/search_book")
+async def get_search_book(db: AsyncSession = Depends(get_database)):
+    # 需求： 作者以 曹 开头  % _
+    # like() 模糊查询： % 任意个字符；_ 一个单个字符
+    # result = await db.execute(select(Book).where(Book.author.like("曹_")))
 
-    if db_book is None:
-        raise HTTPException(
-            status_code=404,
-            detail="查无此书"
-        )
+    # & | ~ 与非
+    # result = await db.execute(select(Book).where((Book.author.like("曹%")) | (Book.price > 100)))
 
-    await db.delete(db_book)
-    await db.commit()
-    return {"msg": "删除图书成功"}
+    # in_() 包含
+    # 需求：书籍id列表，数据库里面的 id 如果在 书籍id列表里面 就返回
+    id_list = [1, 3, 5, 7]
+    result = await db.execute(select(Book).where(Book.id.in_(id_list)))
+    book = result.scalars().all()
+    return book

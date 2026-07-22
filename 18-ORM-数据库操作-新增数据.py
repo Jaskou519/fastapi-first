@@ -1,9 +1,11 @@
 from datetime import datetime
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends
 from sqlalchemy import DateTime, func, String, Float, select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from pydantic import BaseModel
 
 
 app = FastAPI()
@@ -74,17 +76,20 @@ async def get_database():
             await session.close()  # 关闭会话
 
 
-@app.delete("/book/delete_book/{book_id}")
-async def delete_book(book_id: int, db: AsyncSession = Depends(get_database)):
-    # 先查再删 提交
-    db_book = await db.get(Book, book_id)
+# 需求：用户输入图书信息（id、书名、作者、价格、出版社） → 新增
+# 用户输入 → 参数 → 请求体
+class BookBase(BaseModel):
+    id: int
+    bookname: str
+    author: str
+    price: float
+    publisher: str
 
-    if db_book is None:
-        raise HTTPException(
-            status_code=404,
-            detail="查无此书"
-        )
 
-    await db.delete(db_book)
+@app.post("/book/add_book")
+async def add_book(book: BookBase, db: AsyncSession = Depends(get_database)):
+    # ORM对象 → add → commit
+    book_obj = Book(**book.__dict__)
+    db.add(book_obj)
     await db.commit()
-    return {"msg": "删除图书成功"}
+    return book

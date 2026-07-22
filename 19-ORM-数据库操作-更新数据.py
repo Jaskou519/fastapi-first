@@ -5,6 +5,8 @@ from sqlalchemy import DateTime, func, String, Float, select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from pydantic import BaseModel
+
 
 app = FastAPI()
 
@@ -74,17 +76,33 @@ async def get_database():
             await session.close()  # 关闭会话
 
 
-@app.delete("/book/delete_book/{book_id}")
-async def delete_book(book_id: int, db: AsyncSession = Depends(get_database)):
-    # 先查再删 提交
+# 需求：修改图书信息：先查再改
+# 设计思路：路径参数书籍id：作用是查找；请求体参数：作用是新数据（书名、作者、价格、出版社）
+class BookUpdate(BaseModel):
+    bookname: str
+    author: str
+    price: float
+    publisher: str
+
+
+@app.put("/book/update_book/{book_id}")
+async def update_book(book_id: int, data: BookUpdate, db: AsyncSession = Depends(get_database)):
+    # 1. 查找图书
     db_book = await db.get(Book, book_id)
 
+    # 如果未找到 抛出异常
     if db_book is None:
         raise HTTPException(
             status_code=404,
             detail="查无此书"
         )
 
-    await db.delete(db_book)
+    # 2. 找到了则修改：重新赋值
+    db_book.bookname = data.bookname
+    db_book.author = data.author
+    db_book.price = data.price
+    db_book.publisher = data.publisher
+
+    # 3. 提交到数据库
     await db.commit()
-    return {"msg": "删除图书成功"}
+    return db_book

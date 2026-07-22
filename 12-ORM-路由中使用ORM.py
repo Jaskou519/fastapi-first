@@ -1,12 +1,12 @@
 from datetime import datetime
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends
 from sqlalchemy import DateTime, func, String, Float, select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-
 app = FastAPI()
+
 
 # 1. 创建异步引擎
 ASYNC_DATABASE_URL = "mysql+aiomysql://root:123456@localhost:3306/FastAPI_first?charset=utf8"
@@ -21,10 +21,8 @@ async_engine = create_async_engine(
 # 2. 定义模型类： 基类 + 表对应的模型类
 # 基类：创建时间、更新时间；书籍表：id、书名、作者、价格、出版社
 class Base(DeclarativeBase):
-    create_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now,
-                                                  comment="创建时间")
-    update_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now,
-                                                  onupdate=func.now(), comment="修改时间")
+    create_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now, comment="创建时间")
+    update_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now, onupdate=func.now(), comment="修改时间")
 
 
 class Book(Base):
@@ -54,6 +52,7 @@ async def root():
     return {"message": "Hello World"}
 
 
+# 需求：查询功能的接口，查询图书 → 依赖注入：创建依赖项获取数据库会话 + Depends 注入路由处理函数
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,  # 绑定数据库引擎
     class_=AsyncSession,  # 指定会话类
@@ -74,17 +73,9 @@ async def get_database():
             await session.close()  # 关闭会话
 
 
-@app.delete("/book/delete_book/{book_id}")
-async def delete_book(book_id: int, db: AsyncSession = Depends(get_database)):
-    # 先查再删 提交
-    db_book = await db.get(Book, book_id)
-
-    if db_book is None:
-        raise HTTPException(
-            status_code=404,
-            detail="查无此书"
-        )
-
-    await db.delete(db_book)
-    await db.commit()
-    return {"msg": "删除图书成功"}
+@app.get("/book/books")
+async def get_book_list(db: AsyncSession = Depends(get_database)):
+    # 查询
+    result = await db.execute(select(Book))
+    book = result.scalars().all()
+    return book
